@@ -34,16 +34,32 @@ docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-
 docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest pack build myproject.ipkg
 ```
 
-## Optional: Convenience Wrapper
+## Convenience Options
 
-For easier usage, download the helper script:
+### Option 1: Shell Alias (Recommended)
+
+Add to your `~/.bashrc` or `~/.zshrc`:
+
+```bash
+alias idris2='docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest idris2'
+alias pack='docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest pack'
+```
+
+Then use like normal commands:
+```bash
+idris2              # Start REPL
+pack install hedgehog
+pack build myproject.ipkg
+```
+
+### Option 2: Wrapper Script
+
+Download the helper script:
 
 ```bash
 curl -O https://raw.githubusercontent.com/Oichkatzelesfrettschen/idris2-pack-docker/master/idris2
 chmod +x idris2
-./idris2 shell              # Interactive shell
-./idris2 repl               # Idris2 REPL
-./idris2 pack install hedgehog
+./idris2 shell
 ```
 
 ## Requirements
