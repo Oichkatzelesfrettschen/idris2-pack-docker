@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+
+# Idris2-Pack Docker Helper Script
+# Quick and easy way to use Idris2 + pack in Docker without installation
+
+set -euo pipefail
+
+IMAGE="ghcr.io/eirikr/idris2-pack-docker:latest"
+LOCAL_IMAGE="idris2-pack:latest"
+
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+print_help() {
+    cat << EOF
+${BLUE}Idris2-Pack Docker Helper${NC}
+
+Run Idris2 and pack commands easily without local installation!
+
+${GREEN}Usage:${NC}
+  ./idris2 <command>
+
+${GREEN}Examples:${NC}
+  ./idris2 shell                    # Start interactive bash shell
+  ./idris2 repl                     # Start Idris2 REPL
+  ./idris2 pack help                # Show pack help
+  ./idris2 pack install hedgehog    # Install a package
+  ./idris2 build myproject.ipkg     # Build an Idris2 project
+  ./idris2 run myproject.ipkg       # Run an Idris2 project
+  ./idris2 compile MyFile.idr       # Compile a single file
+
+${GREEN}Special Commands:${NC}
+  shell                             # Interactive bash shell in container
+  pull                              # Pull latest Docker image
+  build-local                       # Build Docker image locally
+  version                           # Show Idris2 and pack versions
+  help                              # Show this help
+
+${YELLOW}Note:${NC} Your current directory is mounted at /workspace in the container.
+
+EOF
+}
+
+check_docker() {
+    if ! command -v docker &> /dev/null; then
+        echo -e "${YELLOW}Docker is not installed!${NC}"
+        echo "Please install Docker Desktop from: https://www.docker.com/products/docker-desktop/"
+        exit 1
+    fi
+}
+
+pull_image() {
+    echo -e "${BLUE}Pulling latest Idris2-pack Docker image...${NC}"
+    docker pull "$IMAGE" || {
+        echo -e "${YELLOW}Failed to pull from registry. Trying local image...${NC}"
+        IMAGE="$LOCAL_IMAGE"
+    }
+}
+
+build_local() {
+    echo -e "${BLUE}Building Idris2-pack Docker image locally...${NC}"
+    echo "This will take ~20 minutes..."
+    docker build -t "$LOCAL_IMAGE" -f Dockerfile .
+    IMAGE="$LOCAL_IMAGE"
+    echo -e "${GREEN}Build complete!${NC}"
+}
+
+run_in_container() {
+    docker run --rm -it -v "$(pwd):/workspace" "$IMAGE" "$@"
+}
+
+# Main logic
+check_docker
+
+if [ $# -eq 0 ]; then
+    print_help
+    exit 0
+fi
+
+case "${1:-help}" in
+    help|--help|-h)
+        print_help
+        ;;
+    shell)
+        echo -e "${BLUE}Starting interactive shell...${NC}"
+        run_in_container bash
+        ;;
+    pull)
+        pull_image
+        ;;
+    build-local)
+        build_local
+        ;;
+    version)
+        echo -e "${BLUE}Versions:${NC}"
+        run_in_container bash -c "idris2 --version && echo && pack help | head -1"
+        ;;
+    repl)
+        run_in_container idris2
+        ;;
+    build)
+        if [ $# -lt 2 ]; then
+            echo "Usage: ./idris2 build <project.ipkg>"
+            exit 1
+        fi
+        run_in_container pack build "$2"
+        ;;
+    run)
+        if [ $# -lt 2 ]; then
+            echo "Usage: ./idris2 run <project.ipkg>"
+            exit 1
+        fi
+        run_in_container pack run "$2"
+        ;;
+    compile)
+        if [ $# -lt 2 ]; then
+            echo "Usage: ./idris2 compile <file.idr>"
+            exit 1
+        fi
+        run_in_container idris2 -o output "$2"
+        ;;
+    pack)
+        shift
+        run_in_container pack "$@"
+        ;;
+    *)
+        # Pass through to idris2
+        run_in_container idris2 "$@"
+        ;;
+esac
