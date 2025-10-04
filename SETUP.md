@@ -33,12 +33,17 @@ git push -u origin master
 
 ## 5. Share With Friends
 
-Send them this:
+Send them the GitHub repo: https://github.com/Oichkatzelesfrettschen/idris2-pack-docker
+
+Or this quick start:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Oichkatzelesfrettschen/idris2-pack-docker/master/idris2
-chmod +x idris2
-./idris2 shell
+# Run directly
+docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest
+
+# Or add aliases to ~/.bashrc
+alias idris2='docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest idris2'
+alias pack='docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest pack'
 ```
 
 Done!
