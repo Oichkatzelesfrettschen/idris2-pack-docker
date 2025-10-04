@@ -2,65 +2,68 @@
 
 **Idris2 0.7.0 + Pack in a container. Works on any machine.**
 
-## Quick Start (Docker)
+📘 **New to Docker?** Read the [Complete Beginner Guide](BEGINNER_GUIDE.md) for step-by-step instructions.
+
+## Quick Start
 
 ```bash
-# Interactive shell with your current directory mounted
+# Start interactive shell (your current directory is mounted at /workspace inside)
 docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest
 
-# Or run commands directly
-docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest idris2 --version
-docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest pack help
+# Inside the container, you can use:
+#   pack install <package>
+#   pack build myproject.ipkg
+#   idris2 (starts REPL)
+#   idris2 --version
 ```
 
 ## What You Get
 
-- ✅ Idris2 0.7.0 (with custom --db-repo feature)
-- ✅ Pack package manager
-- ✅ Chez Scheme 10.0.0
-- ✅ Debian 13 Trixie
-- ✅ Works on Windows/Mac/Linux
+- ✅ **Pack package manager** (includes Idris2 0.7.0 + custom --db-repo feature)
+- ✅ **Chez Scheme 10.0.0** (Idris backend)
+- ✅ **Debian 13 Trixie** (latest stable, August 2025)
+- ✅ **All dependencies pre-installed** - no setup needed
+- ✅ **Works on any OS** with Docker (Windows/Mac/Linux)
 
-## Common Commands
+**Note:** Pack is the package manager that includes Idris2. You don't install them separately.
 
-```bash
-# Start Idris2 REPL
-docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest idris2
-
-# Install a package
-docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest pack install hedgehog
-
-# Build a project
-docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest pack build myproject.ipkg
-```
-
-## Convenience Options
-
-### Option 1: Shell Alias (Recommended)
-
-Add to your `~/.bashrc` or `~/.zshrc`:
+## Typical Workflow
 
 ```bash
-alias idris2='docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest idris2'
-alias pack='docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest pack'
+# 1. Create a project directory on your computer
+mkdir ~/my-idris-project
+cd ~/my-idris-project
+
+# 2. Start the Docker container (mounts your current directory)
+docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest
+
+# 3. Inside the container:
+pack install hedgehog      # Install packages
+idris2                     # Start REPL
+pack build myproject.ipkg  # Build your project
+
+# 4. Exit when done (Ctrl+D or type 'exit')
+# Your files are saved on your computer in ~/my-idris-project
 ```
 
-Then use like normal commands:
+## Why `$(pwd)` Matters
+
+**`-v $(pwd):/workspace`** mounts your current directory inside the container.
+
+- **With this:** Files you create persist on your computer ✅
+- **Without this:** Container can't see your files, nothing is saved ❌
+
+**Always run the command from your project directory!**
+
+## Convenience: Make a Short Alias
+
+Add to `~/.bashrc`:
+
 ```bash
-idris2              # Start REPL
-pack install hedgehog
-pack build myproject.ipkg
+alias idris2-docker='docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest'
 ```
 
-### Option 2: Wrapper Script
-
-Download the helper script:
-
-```bash
-curl -O https://raw.githubusercontent.com/Oichkatzelesfrettschen/idris2-pack-docker/master/idris2
-chmod +x idris2
-./idris2 shell
-```
+Then: `idris2-docker` instead of typing the whole command.
 
 ## Requirements
 
