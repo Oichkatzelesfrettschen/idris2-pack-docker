@@ -62,5 +62,6 @@ jobs:
       - name: Test Docker image
         if: github.event_name != 'pull_request'
         run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest pack help
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest idris2 --version
+          IMAGE_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+          docker run --rm ${{ env.REGISTRY }}/${IMAGE_LOWER}:latest pack help
+          docker run --rm ${{ env.REGISTRY }}/${IMAGE_LOWER}:latest idris2 --version
