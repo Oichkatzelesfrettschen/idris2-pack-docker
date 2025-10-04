@@ -8,8 +8,8 @@ FROM debian:trixie
 
 LABEL org.opencontainers.image.title="idris2-pack"
 LABEL org.opencontainers.image.description="Idris2 Package Manager with curated package collections (Debian Trixie)"
-LABEL org.opencontainers.image.source="https://github.com/stefan-hoeck/idris2-pack"
-LABEL org.opencontainers.image.version="0.7.0"
+LABEL org.opencontainers.image.source="https://github.com/Oichkatzelesfrettschen/idris2-pack"
+LABEL org.opencontainers.image.version="0.7.0-custom"
 LABEL org.opencontainers.image.authors="Idris2 Community"
 
 SHELL ["/bin/bash", "-c"]
@@ -39,9 +39,9 @@ ENV PATH="$PACK_DIR/bin:$PATH"
 # Set working directory
 WORKDIR /workspace
 
-# Install pack using the official installation script
-# This bootstraps Idris2 and builds pack from source
-RUN bash -c 'curl -fsSL https://raw.githubusercontent.com/stefan-hoeck/idris2-pack/main/install.bash > /tmp/install.bash && \
+# Install pack using the installation script from our fork
+# This bootstraps Idris2 and builds pack from source with custom db-repo feature
+RUN bash -c 'curl -fsSL https://raw.githubusercontent.com/Oichkatzelesfrettschen/idris2-pack/main/install.bash > /tmp/install.bash && \
     chmod +x /tmp/install.bash && \
     echo "chezscheme" | bash /tmp/install.bash && \
     rm /tmp/install.bash'
