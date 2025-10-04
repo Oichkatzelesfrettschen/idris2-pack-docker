@@ -5,7 +5,7 @@
 ## Quick Start
 
 ```bash
-curl -O https://raw.githubusercontent.com/eirikr/idris2-pack-docker/main/idris2
+curl -O https://raw.githubusercontent.com/Oichkatzelesfrettschen/idris2-pack-docker/master/idris2
 chmod +x idris2
 ./idris2 shell
 ```
@@ -30,8 +30,8 @@ chmod +x idris2
 ## Or Raw Docker
 
 ```bash
-docker pull ghcr.io/eirikr/idris2-pack-docker:latest
-docker run --rm -it -v $(pwd):/workspace ghcr.io/eirikr/idris2-pack-docker:latest
+docker pull ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest
+docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest
 ```
 
 ## Requirements
