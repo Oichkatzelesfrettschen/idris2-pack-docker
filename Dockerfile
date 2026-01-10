@@ -36,8 +36,11 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create symlink for scheme executable (Debian installs it as 'chezscheme' but pack expects 'scheme')
+RUN ln -sf /usr/bin/chezscheme /usr/bin/scheme
+
 # Verify installed versions
-RUN git --version && chezscheme --version
+RUN git --version && chezscheme --version && scheme --version
 
 ENV HOME="/root"
 ENV PACK_DIR="$HOME/.pack"
@@ -50,12 +53,16 @@ WORKDIR /workspace
 # This bootstraps Idris2 and builds pack from source with custom db-repo feature
 RUN bash -c 'curl -fsSL https://raw.githubusercontent.com/Oichkatzelesfrettschen/idris2-pack/main/install.bash > /tmp/install.bash && \
     chmod +x /tmp/install.bash && \
-    echo "chezscheme" | bash /tmp/install.bash && \
+    echo "scheme" | bash /tmp/install.bash && \
     rm /tmp/install.bash'
+
+# Debug: Show pack installation structure
+RUN echo "Pack directory contents:" && ls -la $PACK_DIR/bin/ && \
+    echo "Pack bin/idris2 content:" && cat $PACK_DIR/bin/idris2 || true
 
 # Verify installations and capture version info
 RUN pack help > /dev/null 2>&1 && echo "Pack installed successfully"
-RUN idris2 --version
+RUN bash -c 'idris2 --version'
 
 # Store version information for runtime queries
 RUN echo "IDRIS2_VERSION=$(idris2 --version | head -1 | sed 's/Idris 2, version //')" > /etc/idris2-version && \
