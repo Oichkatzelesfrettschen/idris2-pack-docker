@@ -7,7 +7,10 @@
 
 FROM debian:trixie
 
-# Build argument for version (auto-detected during build or passed via CI)
+# Build argument for version tagging (passed via CI from GitHub releases API)
+# Note: This only sets the image label/tag. The actual Idris2 version installed
+# is determined by the pack installation script, which installs the latest
+# compatible version. The CI workflow verifies that these versions match.
 ARG IDRIS2_VERSION=latest
 
 LABEL org.opencontainers.image.title="idris2-pack"
@@ -24,7 +27,6 @@ SHELL ["/bin/bash", "-c"]
 # - libgmp-dev: GMP library for arbitrary precision arithmetic
 # - git: for fetching package repositories (>= 2.35.1 required)
 # - ca-certificates/curl: for HTTPS downloads
-# - jq: for parsing JSON (used to fetch latest Idris2 version)
 RUN apt-get update && apt-get install --yes --no-install-recommends \
     build-essential \
     chezscheme \
@@ -32,7 +34,6 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     git \
     ca-certificates \
     curl \
-    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Verify installed versions
