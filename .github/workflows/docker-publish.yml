@@ -100,7 +100,9 @@ jobs:
           EXPECTED_VERSION="${{ steps.idris2_version.outputs.version }}"
           echo "Installed Idris2 version: $INSTALLED_VERSION"
           echo "Expected Idris2 version: $EXPECTED_VERSION"
-          if [ "$INSTALLED_VERSION" != "$EXPECTED_VERSION" ]; then
-            echo "ERROR: Idris2 version mismatch in image. Installed: $INSTALLED_VERSION, Expected: $EXPECTED_VERSION"
+          # Version may include commit hash suffix (e.g., 0.8.0-651383147), so check prefix match
+          if [[ "$INSTALLED_VERSION" != "$EXPECTED_VERSION"* ]]; then
+            echo "ERROR: Idris2 version mismatch in image. Installed: $INSTALLED_VERSION, Expected prefix: $EXPECTED_VERSION"
             exit 1
           fi
+          echo "Version check passed: installed version '$INSTALLED_VERSION' matches expected prefix '$EXPECTED_VERSION'"
