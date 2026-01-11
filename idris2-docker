@@ -5,32 +5,83 @@
 set -e
 
 # Configuration
-IMAGE="ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest"
+IMAGE_BASE="ghcr.io/oichkatzelesfrettschen/idris2-pack-docker"
+IMAGE_TAG="${IDRIS2_TAG:-latest}"
+IMAGE="${IMAGE_BASE}:${IMAGE_TAG}"
 IDRIS_CACHE_DIR="${IDRIS_CACHE_DIR:-$HOME/.idris2-cache}"
 IDRIS_WORKSPACE="${IDRIS_WORKSPACE:-$PWD}"
+
+# Color output (disable with NO_COLOR=1)
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m' # No Color
+else
+    RED='' GREEN='' YELLOW='' BLUE='' NC=''
+fi
+
+msg_info()  { echo -e "${BLUE}[INFO]${NC} $*"; }
+msg_ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
+msg_warn()  { echo -e "${YELLOW}[WARN]${NC} $*" >&2; }
+msg_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
 # Auto-detect container runtime (prefer podman for lower overhead)
 detect_runtime() {
     if command -v podman &>/dev/null; then
-        echo "podman"
-    elif command -v docker &>/dev/null; then
+        # Check if podman is functional
+        if podman info &>/dev/null 2>&1; then
+            echo "podman"
+            return
+        fi
+    fi
+    if command -v docker &>/dev/null; then
         if docker info &>/dev/null 2>&1; then
             echo "docker"
         elif sudo docker info &>/dev/null 2>&1; then
             echo "sudo docker"
         else
-            echo "none"
+            echo "docker-broken"
         fi
     else
         echo "none"
     fi
 }
 
+# Detect TTY for interactive mode
+detect_tty_flags() {
+    if [ -t 0 ] && [ -t 1 ]; then
+        echo "-it"
+    elif [ -t 1 ]; then
+        echo "-i"
+    else
+        echo ""
+    fi
+}
+
 RUNTIME=$(detect_runtime)
-if [ "$RUNTIME" = "none" ]; then
-    echo "Error: Neither podman nor docker is available" >&2
-    exit 1
-fi
+TTY_FLAGS=$(detect_tty_flags)
+
+# Handle runtime detection failures with helpful messages
+case "$RUNTIME" in
+    none)
+        msg_error "Neither podman nor docker is installed"
+        echo "Install with:"
+        echo "  Debian/Ubuntu: sudo apt install podman"
+        echo "  Fedora/RHEL:   sudo dnf install podman"
+        echo "  Arch:          sudo pacman -S podman"
+        exit 1
+        ;;
+    docker-broken)
+        msg_error "Docker is installed but not running or accessible"
+        echo "Try:"
+        echo "  1. Start Docker: sudo systemctl start docker"
+        echo "  2. Add yourself to docker group: sudo usermod -aG docker \$USER"
+        echo "  3. Log out and back in"
+        exit 1
+        ;;
+esac
 
 # Ensure cache directory exists
 ensure_cache() {
@@ -71,8 +122,8 @@ show_help() {
 idris2-docker - Smart wrapper for Idris2 Pack Docker
 
 Runtime: $RUNTIME
-Cache: $IDRIS_CACHE_DIR
-Cache initialized: $(cache_initialized && echo "yes" || echo "no")
+Image: $IMAGE
+Cache: $IDRIS_CACHE_DIR ($(cache_initialized && echo "initialized" || echo "not initialized"))
 
 USAGE:
   idris2-docker [OPTIONS] COMMAND [ARGS...]
@@ -80,8 +131,10 @@ USAGE:
 OPTIONS:
   --cached               Use initialized cache (must run --init-cache first)
   --fresh, --no-cache    Start with no mounts (clean container)
+  --tag <tag>            Use specific image tag (default: latest)
   --init-cache           Initialize local cache from container
   --benchmark [mode]     Run benchmark (fresh or cached)
+  --diagnose             Run diagnostics to check setup
   --info                 Show system and cache info
   --pull                 Pull latest image
   --clean                Remove all cached state
@@ -95,17 +148,27 @@ COMMANDS:
   <default>     Pass through to container
 
 ENVIRONMENT:
+  IDRIS2_TAG        Image tag to use (default: latest)
   IDRIS_CACHE_DIR   Cache directory (default: ~/.idris2-cache)
   IDRIS_WORKSPACE   Workspace directory (default: current dir)
+  NO_COLOR          Disable colored output
 
 EXAMPLES:
-  idris2-docker shell                # Shell with workspace mounted
-  idris2-docker --init-cache         # Initialize pack database cache
-  idris2-docker --cached shell       # Shell with full cache mounts
-  idris2-docker --fresh shell        # Clean container, no mounts
-  idris2-docker pack install json    # Install package (workspace mounted)
-  idris2-docker --benchmark fresh    # Benchmark in fresh mode
+  idris2-docker shell                     # Shell with workspace mounted
+  idris2-docker --init-cache              # Initialize pack database cache
+  idris2-docker --cached shell            # Shell with full cache mounts
+  idris2-docker --fresh shell             # Clean container, no mounts
+  idris2-docker --tag idris2-0.8 shell    # Use specific version
+  idris2-docker pack install json         # Install package
+  idris2-docker --diagnose                # Check setup
+  IDRIS2_TAG=idris2-0.8 idris2-docker shell  # Alt version syntax
 EOF
+}
+
+# Check if image is available locally
+image_available() {
+    $RUNTIME image exists "$IMAGE" 2>/dev/null || \
+    $RUNTIME images -q "$IMAGE" 2>/dev/null | grep -q .
 }
 
 # Run container
@@ -130,11 +193,23 @@ run_container() {
         esac
     done
 
+    # Check if image is available
+    if ! image_available; then
+        msg_warn "Image not found locally, pulling..."
+        if ! $RUNTIME pull "$IMAGE"; then
+            msg_error "Failed to pull image: $IMAGE"
+            echo "Check your network connection or try:"
+            echo "  idris2-docker --pull"
+            exit 1
+        fi
+    fi
+
     local mounts=""
     case "$mount_mode" in
         cached)
             if ! cache_initialized; then
-                echo "Error: Cache not initialized. Run: idris2-docker --init-cache" >&2
+                msg_error "Cache not initialized"
+                echo "Run: idris2-docker --init-cache"
                 exit 1
             fi
             mounts=$(build_cache_mounts)
@@ -148,7 +223,7 @@ run_container() {
     esac
 
     # shellcheck disable=SC2086
-    $RUNTIME run --rm -it $mounts "$IMAGE" "${cmd_args[@]}"
+    $RUNTIME run --rm $TTY_FLAGS $mounts "$IMAGE" "${cmd_args[@]}"
 }
 
 # Show info
@@ -156,8 +231,11 @@ show_info() {
     echo "=== Idris2 Docker Info ==="
     echo "Runtime: $RUNTIME"
     echo "Image: $IMAGE"
+    echo "Image available: $(image_available && echo 'yes' || echo 'no')"
     echo "Cache dir: $IDRIS_CACHE_DIR"
+    echo "Cache initialized: $(cache_initialized && echo 'yes' || echo 'no')"
     echo "Workspace: $IDRIS_WORKSPACE"
+    echo "TTY mode: ${TTY_FLAGS:-none}"
     echo ""
     echo "=== Cache sizes ==="
     if [ -d "$IDRIS_CACHE_DIR" ]; then
@@ -168,6 +246,90 @@ show_info() {
     echo ""
     echo "=== Container image ==="
     $RUNTIME images "$IMAGE" 2>/dev/null || echo "Image not pulled yet"
+}
+
+# Run diagnostics
+run_diagnostics() {
+    echo "=== Idris2 Docker Diagnostics ==="
+    echo ""
+
+    # Runtime check
+    echo "1. Container Runtime"
+    echo "   Detected: $RUNTIME"
+    if [ "$RUNTIME" = "podman" ]; then
+        echo "   Version: $(podman --version 2>/dev/null || echo 'unknown')"
+    elif [ "$RUNTIME" = "docker" ]; then
+        echo "   Version: $(docker --version 2>/dev/null || echo 'unknown')"
+    fi
+    msg_ok "Runtime OK"
+    echo ""
+
+    # Image check
+    echo "2. Container Image"
+    echo "   Image: $IMAGE"
+    if image_available; then
+        msg_ok "Image available locally"
+        local img_size
+        img_size=$($RUNTIME images --format "{{.Size}}" "$IMAGE" 2>/dev/null | head -1)
+        echo "   Size: ${img_size:-unknown}"
+    else
+        msg_warn "Image not available locally"
+        echo "   Run: idris2-docker --pull"
+    fi
+    echo ""
+
+    # Cache check
+    echo "3. Cache Directory"
+    echo "   Path: $IDRIS_CACHE_DIR"
+    if [ -d "$IDRIS_CACHE_DIR" ]; then
+        if cache_initialized; then
+            msg_ok "Cache initialized"
+            local db_files
+            db_files=$(find "$IDRIS_CACHE_DIR/pack-db" -name "*.toml" 2>/dev/null | wc -l)
+            echo "   Package database files: $db_files"
+        else
+            msg_warn "Cache directory exists but not initialized"
+            echo "   Run: idris2-docker --init-cache"
+        fi
+    else
+        msg_info "Cache directory not created yet"
+    fi
+    echo ""
+
+    # Workspace check
+    echo "4. Workspace"
+    echo "   Path: $IDRIS_WORKSPACE"
+    if [ -d "$IDRIS_WORKSPACE" ]; then
+        if [ -w "$IDRIS_WORKSPACE" ]; then
+            msg_ok "Workspace writable"
+        else
+            msg_error "Workspace not writable"
+        fi
+        local ipkg_count
+        ipkg_count=$(find "$IDRIS_WORKSPACE" -maxdepth 2 -name "*.ipkg" 2>/dev/null | wc -l)
+        if [ "$ipkg_count" -gt 0 ]; then
+            echo "   Found $ipkg_count .ipkg file(s)"
+        fi
+    else
+        msg_error "Workspace directory does not exist"
+    fi
+    echo ""
+
+    # Quick container test
+    echo "5. Container Test"
+    if image_available; then
+        echo "   Testing idris2 --version..."
+        if timeout 30 $RUNTIME run --rm "$IMAGE" idris2 --version 2>/dev/null; then
+            msg_ok "Container working"
+        else
+            msg_error "Container test failed"
+        fi
+    else
+        msg_warn "Skipping (image not available)"
+    fi
+    echo ""
+
+    echo "=== Diagnostics Complete ==="
 }
 
 # Benchmark
@@ -234,9 +396,27 @@ case "${1:-}" in
     --info|info)
         show_info
         ;;
+    --diagnose|diagnose)
+        run_diagnostics
+        ;;
     --pull|pull)
-        echo "Pulling $IMAGE..."
+        msg_info "Pulling $IMAGE..."
         $RUNTIME pull "$IMAGE"
+        msg_ok "Image pulled successfully"
+        ;;
+    --tag)
+        # Handle --tag <tag> <command>
+        if [ -z "${2:-}" ]; then
+            msg_error "--tag requires a tag argument"
+            echo "Usage: idris2-docker --tag <tag> <command>"
+            echo "Example: idris2-docker --tag idris2-0.8 shell"
+            exit 1
+        fi
+        IMAGE_TAG="$2"
+        IMAGE="${IMAGE_BASE}:${IMAGE_TAG}"
+        shift 2
+        # Re-run with remaining args
+        exec "$0" "$@"
         ;;
     --init-cache)
         init_cache
