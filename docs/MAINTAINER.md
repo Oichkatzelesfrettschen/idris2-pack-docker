@@ -62,53 +62,56 @@ The `.github/workflows/docker-publish.yml` handles:
 
 ## Release Process
 
+### Automated Versioning
+
+The Docker image version is **automatically detected** from the official Idris2 GitHub releases. The CI/CD workflow:
+
+1. Fetches the latest Idris2 version from `https://api.github.com/repos/idris-lang/Idris2/releases/latest`
+2. Passes this version as a build argument to Docker
+3. Tags the image with version-specific tags (e.g., `idris2-0.8.0`, `idris2-0.8`)
+4. Verifies the installed version matches the expected version
+
+**Weekly scheduled builds** (Sunday at midnight UTC) automatically check for new Idris2 releases and rebuild the image if needed.
+
 ### Versioning Strategy
 
-Follow semantic versioning aligned with Idris2 releases:
+The image version aligns with Idris2 releases:
 
 ```bash
-# Major version: Idris2 major version changes
-v0.7.0  # Idris2 0.7.0
-
-# Minor version: Pack updates or significant features
-v0.7.1  # Pack updates with Idris2 0.7.0
-
-# Patch version: Bug fixes and minor updates
-v0.7.0-1  # Dockerfile improvements
+# Available tags after each build:
+latest              # Most recent successful build
+trixie              # Debian base reference
+idris2-X.Y.Z        # Specific Idris2 version (e.g., idris2-0.8.0)
+idris2-X.Y          # Minor version series (e.g., idris2-0.8)
 ```
 
-### Creating a Release
+### Manual Release (Optional)
 
-1. **Update Version Labels:**
-   ```dockerfile
-   # In Dockerfile
-   LABEL org.opencontainers.image.version="0.7.0-custom"
-   ```
+For custom releases or hotfixes, you can still create manual tags:
 
-2. **Commit and Tag:**
+1. **Commit and Tag:**
    ```bash
-   git add Dockerfile
-   git commit -m "Release v0.7.0: Idris2 0.7.0 with Pack"
-   git tag -a v0.7.0 -m "Release v0.7.0: Idris2 0.7.0 with Pack"
+   git add .
+   git commit -m "Release v0.8.0-hotfix: Description"
+   git tag -a v0.8.0-hotfix -m "Release v0.8.0-hotfix: Description"
    git push origin master
-   git push origin v0.7.0
+   git push origin v0.8.0-hotfix
    ```
 
-3. **Create GitHub Release:**
+2. **Create GitHub Release:**
    - Go to Releases → "Create a new release"
    - Choose the tag
-   - Title: "v0.7.0: Idris2 0.7.0 with Pack"
+   - Title: "v0.8.0-hotfix: Description"
    - Generate release notes
-   - Add custom notes about changes
    - Publish release
 
-4. **Monitor Build:**
+3. **Monitor Build:**
    - Check Actions tab for build progress
    - Verify image is published to registry
    - Test the new image:
      ```bash
-     docker pull ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:v0.7.0
-     docker run --rm ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:v0.7.0 idris2 --version
+     docker pull ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:v0.8.0-hotfix
+     docker run --rm ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:v0.8.0-hotfix idris2 --version
      ```
 
 ## Updating Dependencies
@@ -370,17 +373,17 @@ Post updates to:
 ### Template for Release Notes
 
 ```markdown
-## v0.7.0: Idris2 0.7.0 with Pack
+## v0.8.0: Idris2 0.8.0 with Pack
 
 ### What's New
-- Updated to Idris2 0.7.0
+- Updated to Idris2 0.8.0
 - Pack includes latest package database
 - Debian 13 base for improved security
 - Custom --db-repo feature for alternative package sources
 
 ### Docker Images
 - `ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest`
-- `ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:v0.7.0`
+- `ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:v0.8.0`
 - `ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:trixie`
 
 ### Quick Start
@@ -389,7 +392,7 @@ docker run --rm -it -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-p
 \```
 
 ### Changes
-- Updated Idris2 from 0.6.0 to 0.7.0
+- Updated Idris2 from 0.7.0 to 0.8.0
 - Updated Pack to latest commit
 - Fixed issue with...
 - Improved documentation for...

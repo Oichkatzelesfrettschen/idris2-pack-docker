@@ -251,8 +251,8 @@ version = 0.1.0
 authors = "Your Name"
 maintainers = "Your Name"
 
-depends = base >= 0.6.0,
-          contrib >= 0.6.0,
+depends = base >= 0.8.0,
+          contrib >= 0.8.0,
           hedgehog
 
 modules = Main,

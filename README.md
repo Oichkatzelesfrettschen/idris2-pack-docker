@@ -1,21 +1,22 @@
 # Idris2 Pack Docker
 
 [![Docker Image Version](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/Oichkatzelesfrettschen/idris2-pack-docker/pkgs/container/idris2-pack-docker)
-[![Idris2 Version](https://img.shields.io/badge/idris2-0.7.0-green)](https://www.idris-lang.org/)
+[![Idris2 Version](https://img.shields.io/badge/idris2-latest-green)](https://www.idris-lang.org/)
 [![Chez Scheme](https://img.shields.io/badge/chez-10.0.0-orange)](https://cisco.github.io/ChezScheme/)
 [![Debian Version](https://img.shields.io/badge/debian-13%20trixie-red)](https://www.debian.org/)
 
-A production-ready Docker image for **Idris2 0.7.0** with the **Pack package manager**, built on Debian 13 (Trixie). Get a fully-configured Idris2 development environment running in seconds on any platform with Docker.
+A production-ready Docker image for **Idris2** with the **Pack package manager**, built on Debian 13 (Trixie). The image automatically tracks the latest stable Idris2 release. Get a fully-configured Idris2 development environment running in seconds on any platform with Docker.
 
 ## Features
 
-- **Idris2 0.7.0** - Latest stable release with full standard library
+- **Idris2** - Automatically updated to the latest stable release with full standard library
 - **Pack Package Manager** - Curated package collections with dependency management
   - Custom fork with `--db-repo` feature for alternative package databases
-- **Chez Scheme 10.0.0** - High-performance backend for compiled Idris2 code
+- **Chez Scheme** - High-performance backend for compiled Idris2 code
 - **Zero Configuration** - All dependencies pre-installed and configured
 - **Cross-Platform** - Works identically on Linux, macOS, and Windows
 - **Production Ready** - Built on stable Debian 13 with security updates
+- **Auto-Updates** - Weekly checks for new Idris2 releases via GitHub Actions
 
 ## Quick Start
 
@@ -164,11 +165,12 @@ The Docker image is automatically built and published via GitHub Actions when ch
 ## Technical Details
 
 - **Base Image**: Debian 13 (Trixie)
-- **Idris2 Version**: 0.7.0
+- **Idris2 Version**: Automatically updated (latest stable from [idris-lang/Idris2](https://github.com/idris-lang/Idris2/releases))
 - **Pack Source**: [Custom fork](https://github.com/Oichkatzelesfrettschen/idris2-pack) with `--db-repo` feature
-- **Backend**: Chez Scheme 10.0.0
+- **Backend**: Chez Scheme (Debian Trixie package)
 - **Image Size**: ~1.8GB
 - **Architecture**: linux/amd64
+- **Version Tags**: `latest`, `trixie`, `idris2-X.Y.Z` (specific version)
 
 ## License
 

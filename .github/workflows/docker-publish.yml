@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [ master ]
   workflow_dispatch:
+  schedule:
+    # Check for new Idris2 releases weekly (Sunday at midnight)
+    - cron: '0 0 * * 0'
 
 env:
   REGISTRY: ghcr.io
@@ -22,6 +25,29 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Fetch latest Idris2 version
+        id: idris2_version
+        run: |
+          set -euo pipefail
+          # Fetch latest release version from Idris2 GitHub repository
+          IDRIS2_API_RESPONSE=$(curl -fsSL https://api.github.com/repos/idris-lang/Idris2/releases/latest || true)
+          if [ -z "$IDRIS2_API_RESPONSE" ]; then
+            echo "Error: Failed to fetch Idris2 release info from GitHub API (empty response)." >&2
+            exit 1
+          fi
+
+          IDRIS2_VERSION=$(echo "$IDRIS2_API_RESPONSE" | jq -r '.tag_name // empty' | sed 's/^v//')
+          if [ -z "$IDRIS2_VERSION" ]; then
+            echo "Error: Unable to determine Idris2 version from GitHub API response." >&2
+            exit 1
+          fi
+
+          echo "Latest Idris2 version: $IDRIS2_VERSION"
+          echo "version=$IDRIS2_VERSION" >> "$GITHUB_OUTPUT"
+          # Also set a short version for minor tags (e.g., 0.8 from 0.8.0)
+          IDRIS2_SHORT=$(echo "$IDRIS2_VERSION" | cut -d. -f1,2)
+          echo "short_version=$IDRIS2_SHORT" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -46,6 +72,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=trixie,enable={{is_default_branch}}
+            type=raw,value=idris2-${{ steps.idris2_version.outputs.version }},enable={{is_default_branch}}
+            type=raw,value=idris2-${{ steps.idris2_version.outputs.short_version }},enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -55,6 +83,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            IDRIS2_VERSION=${{ steps.idris2_version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -65,3 +95,12 @@ jobs:
           IMAGE_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           docker run --rm ${{ env.REGISTRY }}/${IMAGE_LOWER}:latest pack help
           docker run --rm ${{ env.REGISTRY }}/${IMAGE_LOWER}:latest idris2 --version
+          # Verify version matches expected
+          INSTALLED_VERSION=$(docker run --rm ${{ env.REGISTRY }}/${IMAGE_LOWER}:latest idris2 --version | head -1 | sed 's/Idris 2, version //')
+          EXPECTED_VERSION="${{ steps.idris2_version.outputs.version }}"
+          echo "Installed Idris2 version: $INSTALLED_VERSION"
+          echo "Expected Idris2 version: $EXPECTED_VERSION"
+          if [ "$INSTALLED_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "ERROR: Idris2 version mismatch in image. Installed: $INSTALLED_VERSION, Expected: $EXPECTED_VERSION"
+            exit 1
+          fi
