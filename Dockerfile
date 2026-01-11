@@ -43,22 +43,28 @@ RUN ln -sf /usr/bin/chezscheme /usr/bin/scheme
 RUN git --version && chezscheme --version && scheme --version
 
 ENV HOME="/root"
-ENV PACK_DIR="$HOME/.pack"
-ENV PATH="$PACK_DIR/bin:$PATH"
+# XDG directories used by pack (these are the defaults, set explicitly for clarity)
+ENV XDG_CONFIG_HOME="$HOME/.config"
+ENV XDG_STATE_HOME="$HOME/.local/state"
+ENV XDG_CACHE_HOME="$HOME/.cache"
+# Pack installs binaries to ~/.local/bin
+ENV PATH="$HOME/.local/bin:$PATH"
 
 # Set working directory
 WORKDIR /workspace
 
-# Install pack using the installation script from our fork
-# This bootstraps Idris2 and builds pack from source with custom db-repo feature
-RUN bash -c 'curl -fsSL https://raw.githubusercontent.com/Oichkatzelesfrettschen/idris2-pack/main/install.bash > /tmp/install.bash && \
+# Install pack using the upstream installation script
+# This bootstraps Idris2 and builds pack from source
+# The installation script uses XDG directories: binaries go to ~/.local/bin
+RUN bash -c 'curl -fsSL https://raw.githubusercontent.com/stefan-hoeck/idris2-pack/main/install.bash > /tmp/install.bash && \
     chmod +x /tmp/install.bash && \
     echo "scheme" | bash /tmp/install.bash && \
     rm /tmp/install.bash'
 
 # Debug: Show pack installation structure
-RUN echo "Pack directory contents:" && ls -la $PACK_DIR/bin/ && \
-    echo "Pack bin/idris2 content:" && cat $PACK_DIR/bin/idris2 || true
+RUN echo "Pack bin directory contents:" && ls -la $HOME/.local/bin/ && \
+    echo "Pack state directory:" && ls -la $XDG_STATE_HOME/pack/ 2>/dev/null || echo "State directory not found" && \
+    echo "Pack bin/idris2 content:" && cat $HOME/.local/bin/idris2 || true
 
 # Verify installations and capture version info
 RUN pack help > /dev/null 2>&1 && echo "Pack installed successfully"
