@@ -1,0 +1,284 @@
+#!/bin/bash
+# idris2-docker - Smart wrapper for Idris2 Pack Docker with state preservation
+# Auto-detects podman/docker, supports local caching and state preservation
+
+set -e
+
+# Configuration
+IMAGE="ghcr.io/oichkatzelesfrettschen/idris2-pack-docker:latest"
+IDRIS_CACHE_DIR="${IDRIS_CACHE_DIR:-$HOME/.idris2-cache}"
+IDRIS_WORKSPACE="${IDRIS_WORKSPACE:-$PWD}"
+
+# Auto-detect container runtime (prefer podman for lower overhead)
+detect_runtime() {
+    if command -v podman &>/dev/null; then
+        echo "podman"
+    elif command -v docker &>/dev/null; then
+        if docker info &>/dev/null 2>&1; then
+            echo "docker"
+        elif sudo docker info &>/dev/null 2>&1; then
+            echo "sudo docker"
+        else
+            echo "none"
+        fi
+    else
+        echo "none"
+    fi
+}
+
+RUNTIME=$(detect_runtime)
+if [ "$RUNTIME" = "none" ]; then
+    echo "Error: Neither podman nor docker is available" >&2
+    exit 1
+fi
+
+# Ensure cache directory exists
+ensure_cache() {
+    mkdir -p "$IDRIS_CACHE_DIR"/{pack-db,pack-config}
+}
+
+# Check if cache is initialized
+cache_initialized() {
+    [ -f "$IDRIS_CACHE_DIR/pack-db/HEAD.toml" ]
+}
+
+# Initialize cache from container (copies pack's package database)
+init_cache() {
+    echo "Initializing cache from container..."
+    ensure_cache
+    # Copy pack-db from container to local cache
+    $RUNTIME run --rm -v "$IDRIS_CACHE_DIR:/cache" "$IMAGE" bash -c '
+        cp -r /root/.local/state/pack/db/* /cache/pack-db/
+        cp -r /root/.config/pack/* /cache/pack-config/ 2>/dev/null || true
+    '
+    echo "Cache initialized at $IDRIS_CACHE_DIR"
+}
+
+# Build volume mount arguments for state preservation
+# Mounts initialized cache directories and workspace
+build_cache_mounts() {
+    echo "-v $IDRIS_CACHE_DIR/pack-db:/root/.local/state/pack/db -v $IDRIS_CACHE_DIR/pack-config:/root/.config/pack -v $IDRIS_WORKSPACE:/workspace"
+}
+
+# Build workspace-only mount (default, safe)
+build_workspace_mount() {
+    echo "-v $IDRIS_WORKSPACE:/workspace"
+}
+
+# Display help
+show_help() {
+    cat << EOF
+idris2-docker - Smart wrapper for Idris2 Pack Docker
+
+Runtime: $RUNTIME
+Cache: $IDRIS_CACHE_DIR
+Cache initialized: $(cache_initialized && echo "yes" || echo "no")
+
+USAGE:
+  idris2-docker [OPTIONS] COMMAND [ARGS...]
+
+OPTIONS:
+  --cached               Use initialized cache (must run --init-cache first)
+  --fresh, --no-cache    Start with no mounts (clean container)
+  --init-cache           Initialize local cache from container
+  --benchmark [mode]     Run benchmark (fresh or cached)
+  --info                 Show system and cache info
+  --pull                 Pull latest image
+  --clean                Remove all cached state
+
+COMMANDS:
+  shell         Interactive bash shell (default: workspace mounted)
+  repl          Start Idris2 REPL
+  build <ipkg>  Build a project
+  pack <args>   Run pack commands
+  idris2 <args> Run idris2 directly
+  <default>     Pass through to container
+
+ENVIRONMENT:
+  IDRIS_CACHE_DIR   Cache directory (default: ~/.idris2-cache)
+  IDRIS_WORKSPACE   Workspace directory (default: current dir)
+
+EXAMPLES:
+  idris2-docker shell                # Shell with workspace mounted
+  idris2-docker --init-cache         # Initialize pack database cache
+  idris2-docker --cached shell       # Shell with full cache mounts
+  idris2-docker --fresh shell        # Clean container, no mounts
+  idris2-docker pack install json    # Install package (workspace mounted)
+  idris2-docker --benchmark fresh    # Benchmark in fresh mode
+EOF
+}
+
+# Run container
+run_container() {
+    local mount_mode="workspace"  # workspace (default), cached, or fresh
+    local cmd_args=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --cached)
+                mount_mode="cached"
+                shift
+                ;;
+            --fresh|--no-cache)
+                mount_mode="fresh"
+                shift
+                ;;
+            *)
+                cmd_args+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    local mounts=""
+    case "$mount_mode" in
+        cached)
+            if ! cache_initialized; then
+                echo "Error: Cache not initialized. Run: idris2-docker --init-cache" >&2
+                exit 1
+            fi
+            mounts=$(build_cache_mounts)
+            ;;
+        workspace)
+            mounts=$(build_workspace_mount)
+            ;;
+        fresh)
+            mounts=""
+            ;;
+    esac
+
+    # shellcheck disable=SC2086
+    $RUNTIME run --rm -it $mounts "$IMAGE" "${cmd_args[@]}"
+}
+
+# Show info
+show_info() {
+    echo "=== Idris2 Docker Info ==="
+    echo "Runtime: $RUNTIME"
+    echo "Image: $IMAGE"
+    echo "Cache dir: $IDRIS_CACHE_DIR"
+    echo "Workspace: $IDRIS_WORKSPACE"
+    echo ""
+    echo "=== Cache sizes ==="
+    if [ -d "$IDRIS_CACHE_DIR" ]; then
+        du -sh "$IDRIS_CACHE_DIR"/* 2>/dev/null || echo "Empty cache"
+    else
+        echo "No cache directory yet"
+    fi
+    echo ""
+    echo "=== Container image ==="
+    $RUNTIME images "$IMAGE" 2>/dev/null || echo "Image not pulled yet"
+}
+
+# Benchmark
+run_benchmark() {
+    local mode="${1:-cached}"
+    echo "=== Idris2 Pure Benchmark ==="
+    echo "Runtime: $RUNTIME"
+    echo "Mode: $mode"
+    echo ""
+
+    local mounts=""
+    if [ "$mode" = "cached" ]; then
+        ensure_cache
+        mounts=$(build_cache_mounts)
+    else
+        mounts="-v /tmp:/workspace"
+    fi
+
+    echo "--- Test 1: idris2 --version (cold start) ---"
+    # shellcheck disable=SC2086
+    time $RUNTIME run --rm $mounts "$IMAGE" idris2 --version
+
+    echo ""
+    echo "--- Test 2: pack help (runtime check) ---"
+    # shellcheck disable=SC2086
+    time $RUNTIME run --rm $mounts "$IMAGE" pack help >/dev/null
+
+    echo ""
+    echo "--- Test 3: Compile & run Hello World ---"
+    # shellcheck disable=SC2086
+    time $RUNTIME run --rm $mounts "$IMAGE" bash -c '
+        cd /workspace
+        mkdir -p benchmark_test && cd benchmark_test
+        cat > hello.idr << IDRIS
+module Main
+main : IO ()
+main = putStrLn "Hello from benchmark!"
+IDRIS
+        idris2 hello.idr -o hello
+        ./build/exec/hello
+        cd .. && rm -rf benchmark_test
+    '
+
+    echo ""
+    echo "=== Benchmark complete ==="
+}
+
+# Clean cache
+clean_cache() {
+    if [ -d "$IDRIS_CACHE_DIR" ]; then
+        echo "Removing cache at $IDRIS_CACHE_DIR..."
+        rm -rf "$IDRIS_CACHE_DIR"
+        echo "Done."
+    else
+        echo "No cache to clean."
+    fi
+}
+
+# Main
+case "${1:-}" in
+    --help|-h|help)
+        show_help
+        ;;
+    --info|info)
+        show_info
+        ;;
+    --pull|pull)
+        echo "Pulling $IMAGE..."
+        $RUNTIME pull "$IMAGE"
+        ;;
+    --init-cache)
+        init_cache
+        ;;
+    --clean|clean)
+        clean_cache
+        ;;
+    --benchmark|benchmark)
+        run_benchmark "${2:-fresh}"
+        ;;
+    --cached)
+        shift
+        run_container --cached "${@:-bash}"
+        ;;
+    --fresh|--no-cache)
+        shift
+        run_container --fresh "${@:-bash}"
+        ;;
+    shell)
+        shift
+        run_container bash "$@"
+        ;;
+    repl)
+        shift
+        run_container idris2 "$@"
+        ;;
+    build)
+        shift
+        run_container idris2 --build "$@"
+        ;;
+    pack)
+        shift
+        run_container pack "$@"
+        ;;
+    idris2)
+        shift
+        run_container idris2 "$@"
+        ;;
+    "")
+        show_help
+        ;;
+    *)
+        run_container "$@"
+        ;;
+esac

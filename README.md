@@ -11,7 +11,6 @@ A production-ready Docker image for **Idris2** with the **Pack package manager**
 
 - **Idris2** - Automatically updated to the latest stable release with full standard library
 - **Pack Package Manager** - Curated package collections with dependency management
-  - Custom fork with `--db-repo` feature for alternative package databases
 - **Chez Scheme** - High-performance backend for compiled Idris2 code
 - **Zero Configuration** - All dependencies pre-installed and configured
 - **Cross-Platform** - Works identically on Linux, macOS, and Windows
@@ -87,19 +86,31 @@ docker run --rm -v $(pwd):/workspace ghcr.io/oichkatzelesfrettschen/idris2-pack-
 
 ### Using the Helper Script
 
-For convenience, this repository includes an optional helper script:
+For convenience, this repository includes an optional helper script with state preservation and auto-detection of podman/docker:
 
 ```bash
 # Download the helper script
-curl -O https://raw.githubusercontent.com/Oichkatzelesfrettschen/idris2-pack-docker/master/idris2
-chmod +x idris2
+curl -O https://raw.githubusercontent.com/Oichkatzelesfrettschen/idris2-pack-docker/master/idris2-docker
+chmod +x idris2-docker
+sudo mv idris2-docker /usr/local/bin/  # Optional: install system-wide
 
-# Use it for easier commands
-./idris2 shell                    # Interactive shell
-./idris2 repl                     # Start REPL
-./idris2 pack install hedgehog    # Install package
-./idris2 build myproject.ipkg     # Build project
+# Basic commands (workspace mounted by default)
+idris2-docker shell                  # Interactive shell
+idris2-docker repl                   # Start REPL
+idris2-docker pack install hedgehog  # Install package
+idris2-docker build myproject.ipkg   # Build project
+
+# State preservation (optional)
+idris2-docker --init-cache           # Initialize local cache from container
+idris2-docker --cached shell         # Use cached pack database
+idris2-docker --benchmark fresh      # Run performance test
+
+# Information
+idris2-docker --help                 # Show all options
+idris2-docker --info                 # Show cache and runtime info
 ```
+
+The script auto-detects podman (preferred) or docker and supports workspace persistence by default.
 
 ### Creating Aliases
 
@@ -166,11 +177,12 @@ The Docker image is automatically built and published via GitHub Actions when ch
 
 - **Base Image**: Debian 13 (Trixie)
 - **Idris2 Version**: Automatically updated (latest stable from [idris-lang/Idris2](https://github.com/idris-lang/Idris2/releases))
-- **Pack Source**: [Custom fork](https://github.com/Oichkatzelesfrettschen/idris2-pack) with `--db-repo` feature
+- **Pack Source**: [Upstream pack](https://github.com/stefan-hoeck/idris2-pack) via official install script
 - **Backend**: Chez Scheme (Debian Trixie package)
-- **Image Size**: ~1.8GB
+- **Image Size**: ~1.3GB
 - **Architecture**: linux/amd64
 - **Version Tags**: `latest`, `trixie`, `idris2-X.Y.Z` (specific version)
+- **Container Runtime**: Works with Docker or Podman
 
 ## License
 
